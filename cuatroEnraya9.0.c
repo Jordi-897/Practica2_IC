@@ -390,7 +390,7 @@ int ganador(int tablero[][C]){
  * Imprime el tablero con colores ANSI.
  */
 void mostrar(int tablero[][C]){
-    system("cls");
+    system("clear");
     for(int i=0;i<F;i++){
         printf("\033[31;91m| \033[0m");
         for(int j=0;j<C;j++){
@@ -636,7 +636,7 @@ void best_movimiento(int tablero[][C], int umbral){
             // Factor aleatorio para evitar patrones repetitivos
             movimiento = (Puntuacion == mejorPuntuacion && rand()%4==0) ? j:movimiento; 
 
-            printf("Puntucacion: %d, Movimiento: %d\n",Puntuacion,j+1);
+            //printf("Puntucacion: %d, Movimiento: %d\n",Puntuacion,j+1);
         }
     }
 
@@ -668,7 +668,7 @@ int main(){
     int umbral = 9;
 
     inicializar(tablero);
-    srand(time(NULL));
+    srand(999);
 
     // Selección de modo de juego
     do{
