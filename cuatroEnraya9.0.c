@@ -550,7 +550,7 @@ int bot(int tablero[][C], bool jugador, int umbral,int alfa,int beta){
             res -= PosicionFavorable_El_7_Inverso(tablero,true)*5;
             res += tresEnRayaHF(tablero,false,true)*12;
             res -= tresEnRayaHF(tablero,true,false)*12;
-            res -= diagonales_peligrosas(tablero,false,true)*20;
+            res -= diagonales_peligrosas(tablero,true,false)*20;
             res += diagonales_peligrosas(tablero,false,true)*20;
         }
     } else {
@@ -680,6 +680,7 @@ int main(){
         }
     }while(modo < 0 || modo > 1);
 
+    double start = time(NULL);
     // Bucle principal del juego
     do{
         if(modo==0){
@@ -708,7 +709,7 @@ int main(){
             }
         }
     } while (ganador(tablero) == 0 && !(lleno(tablero)));
-
+    double final = time(NULL);
     mostrar(tablero);
 
     // Resultado final
@@ -724,5 +725,5 @@ int main(){
             break;
     }
 
-    system("pause");
+   printf("Tiempo: %f", final-start);
 }
