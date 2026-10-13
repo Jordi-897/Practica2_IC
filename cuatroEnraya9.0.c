@@ -258,6 +258,47 @@ int tresEnRaya(int tablero[][C], bool jugado){
 }
 
 /*
+ * calcularHeuristica
+ * ------------------
+ * Concentra en una única función el cálculo de toda la heurística:
+ *   - tresEnRaya (horizontal, vertical, diagonales)
+ *   - rectangulos 2x3
+ *   - diagonales_peligrosas
+ *   - tresEnRayaHF (patrones horizontales peligrosos)
+ *   - PosicionFavorable_El_7 y su inverso
+ *
+ * Valores positivos favorecen a la máquina (x, jugador = false).
+ * Valores negativos favorecen al jugador humano (o, jugador = true).
+ */
+int calcularHeuristica(int tablero[][C]){
+    int res = 0;
+
+    // Tres en raya
+    res += tresEnRaya(tablero, false);
+    res -= tresEnRaya(tablero, true);
+
+    // Rectángulos 2x3
+    res += rectangulos(tablero, false);
+    res -= rectangulos(tablero, true);
+
+    // Posiciones en forma de "7"
+    res += PosicionFavorable_El_7(tablero, false) * 5;
+    res -= PosicionFavorable_El_7(tablero, true) * 5;
+    res += PosicionFavorable_El_7_Inverso(tablero, false) * 5;
+    res -= PosicionFavorable_El_7_Inverso(tablero, true) * 5;
+
+    // Patrones horizontales peligrosos
+    res += tresEnRayaHF(tablero, false, true) * 12;
+    res -= tresEnRayaHF(tablero, true, false) * 12;
+
+    // Diagonales peligrosas
+    res -= diagonales_peligrosas(tablero, true, false) * 20;
+    res += diagonales_peligrosas(tablero, false, true) * 20;
+
+    return res;
+}
+
+/*
  * lleno
  * -----
  * Comprueba si el tablero está completamente lleno.
@@ -539,19 +580,8 @@ int bot(int tablero[][C], bool jugador, int umbral,int alfa,int beta){
         if(lleno(tablero)){
             res = 0;                 // Empate
         } else {
-            // Heurística avanzada basada en múltiples patrones
-            res += tresEnRaya(tablero,false);
-            res -= tresEnRaya(tablero,true);
-            res += rectangulos(tablero,false);
-            res -= rectangulos(tablero,true);
-            res += PosicionFavorable_El_7(tablero,false)*5;
-            res -= PosicionFavorable_El_7(tablero,true)*5;
-            res += PosicionFavorable_El_7_Inverso(tablero,false)*5;
-            res -= PosicionFavorable_El_7_Inverso(tablero,true)*5;
-            res += tresEnRayaHF(tablero,false,true)*12;
-            res -= tresEnRayaHF(tablero,true,false)*12;
-            res -= diagonales_peligrosas(tablero,true,false)*20;
-            res += diagonales_peligrosas(tablero,false,true)*20;
+            // Heurística avanzada: toda la evaluación se delega a calcularHeuristica
+            res = calcularHeuristica(tablero);
         }
     } else {
         // Turno de la máquina (MAX)
