@@ -1,0 +1,42 @@
+# Binarios y ejecutables (no commitear)
+*.o
+*.a
+*.so
+*.so.*
+*.dylib
+*.exe
+*.out
+cuatroEnraya
+cuatroEnraya9.0
+build/
+bin/
+
+# Ficheros de depuración / sanitizers
+*.dSYM/
+*.su
+*.gcno
+*.gcda
+*.gcov
+vgcore.*
+
+# Ficheros de compiladores / dependencias
+*.d
+*.dep
+
+# Archivos de editores / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs y temporales
+*.log
+/tmp/opencode/
+
+# Entorno local
+.env
+.env.local
+">
