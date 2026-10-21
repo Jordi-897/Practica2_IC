@@ -655,75 +655,85 @@ void best_movimiento(int tablero[][C], int umbral){
  *       * Aumenta profundidad de búsqueda según turnos
  *   - Finaliza cuando hay ganador o tablero lleno
  */
-int main(){
-    int tablero[F][C] ={{-1,1,-1,1,0,0,0}
-                        ,{1,-1,-1,1,0,0,0}
-                        ,{-1,1,1,-1,0,0,0}
-                        ,{1,-1,-1,1,0,0,0}
-                        ,{-1,1,1,1,0,0,0}
-                        ,{-1,-1,-1,1,0,-1,1}};
-    int modo = -1;
-    int jugador=1;
+int main(int argc, char *argv[]) {
+    int tablero[F][C];
     int turnos = 0;
     int umbral = 9;
+    int i = 0;
+
+    int movimientos[] = {1, 2, 3, 4, 5, 6, 7};
+    int num_movimientos = sizeof(movimientos) / sizeof(movimientos[0]);
 
     inicializar(tablero);
     srand(999);
 
-    // Selección de modo de juego
-    do{
-        printf("Introduzca 0 si quiere jugar contra otro jugador\nIntroduzca 1 si quiere jugar contra la maquina\n");
-        scanf("%d",&modo);
-
-        if(modo < 0 || modo > 1){
-            printf("Error");
-        }
-    }while(modo < 0 || modo > 1);
-
     double start = time(NULL);
-    // Bucle principal del juego
-    do{
-        if(modo==0){
-            mostrar(tablero);
-            if(jugador==1){
-                moverJ(tablero,true);
-                jugador=-1;
-            }else{
-                moverJ(tablero,false);
-                jugador = 1;
-            }
-        } else {
-            mostrar(tablero);
-            moverJ(tablero, true);
-            mostrar(tablero);
 
-            if(ganador(tablero) == 0 && !(lleno(tablero))){
-                printf("La maquina esta pensando...\n");
-                printf("Umbral de pensamiento: %d\n",umbral);
+    while (ganador(tablero) == 0 && !lleno(tablero)) {
 
-                best_movimiento(tablero,umbral);
-                turnos++;
-
-                // Ajuste dinámico de profundidad
-                umbral = (C*F/2) == turnos ? 1000:umbral+(int)(!(bool)(turnos%3));
-            }
+        // Si no quedan movimientos predefinidos, gana la máquina
+        if (i >= num_movimientos) {
+            printf("Se han agotado los movimientos predefinidos.\n");
+            printf("Gana la maquina.\n");
+            break;
         }
-    } while (ganador(tablero) == 0 && !(lleno(tablero)));
+
+        mostrar(tablero);
+
+        // Intentar ejecutar el siguiente movimiento predefinido
+        int movimiento = movimientos[i] - 1;
+        i++;
+
+        if (!movPosi(tablero, movimiento)) {
+            printf("Movimiento %d no valido. Se pasa al siguiente.\n",
+                   movimiento + 1);
+            continue;
+        }
+
+        mover(tablero, movimiento, true);
+
+        // Comprobar si la partida ha terminado
+        if (ganador(tablero) != 0 || lleno(tablero)) {
+            break;
+        }
+
+        // Turno de la máquina
+        printf("La maquina esta pensando...\n");
+        printf("Umbral de pensamiento: %d\n", umbral);
+
+        best_movimiento(tablero, umbral);
+        turnos++;
+
+        // Ajuste dinámico de profundidad
+        umbral = (C * F / 2) == turnos
+                     ? 1000
+                     : umbral + (int)(!(bool)(turnos % 3));
+    }
+
     double final = time(NULL);
+
     mostrar(tablero);
 
     // Resultado final
-    switch (ganador(tablero)){
-        case 0:
-            printf("Empate\n");
-            break;
-        case 1:
-            printf("Han ganado las o\n");
-            break;
-        case -1:
-            printf("Han ganado las x\n");
-            break;
+    if (i >= num_movimientos &&
+        ganador(tablero) == 0 &&
+        !lleno(tablero)) {
+        printf("Han ganado las x (la maquina).\n");
+    } else {
+        switch (ganador(tablero)) {
+            case 0:
+                printf("Empate\n");
+                break;
+            case 1:
+                printf("Han ganado las o\n");
+                break;
+            case -1:
+                printf("Han ganado las x\n");
+                break;
+        }
     }
 
-   printf("Tiempo: %f", final-start);
+    printf("Tiempo: %f\n", final - start);
+
+    return 0;
 }
