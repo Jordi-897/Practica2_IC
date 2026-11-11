@@ -3,9 +3,11 @@
 #include<stdlib.h>
 #include<unistd.h>
 #include<time.h>
+#include<limits.h>
+#include<mpi.h>
 
-#define F 6
-#define C 7
+#define F 600
+#define C 10
 
 /*
  * max / min
@@ -40,8 +42,11 @@ int min(int n1, int n2){
 int rectangulos(const int tablero[][C],bool jug){  
     int res=0;
     int jugador = jug ? 1:-1;
-    for(int i=0;i+1<F;i++){
-        for(int j=0;j+2<C;j++){
+#ifdef _OPENMP
+    #pragma omp parallel for reduction(+:res)
+#endif
+    for(int i=0;i<F-1;i++){
+        for(int j=0;j<C-2;j++){
             if(
                 tablero[i][j] == jugador &&
                 tablero[i][j+1] == jugador &&
@@ -61,14 +66,19 @@ int rectangulos(const int tablero[][C],bool jug){
  * ----------------------
  * Detecta diagonales casi completas (3 fichas + 1 hueco).
  * 'par' alterna filas para evaluar patrones específicos.
+ * Optimizado con fusión de bucles por fila para mejorar la localidad de caché
+ * y permitir vectorización sobre tableros grandes (F x C).
  */
 int diagonales_peligrosas(int tablero[][C],bool jug,bool par){
     int jugador = jug ? 1:-1;
     int res=0;
 
-    // Diagonales ↘
-    for(int i= par ? 0:1;i+3<F;i += 2)
-        for(int j=0;j+3<C;j++){
+#ifdef _OPENMP
+    #pragma omp parallel for reduction(+:res)
+#endif
+    for(int i= par ? 0:1;i<F-3;i += 2){
+        // Diagonales ↘
+        for(int j=0;j<C-3;j++){
             if(
                 (tablero[i][j] == 0 &&
                 tablero[i+1][j+1] == jugador &&
@@ -81,9 +91,8 @@ int diagonales_peligrosas(int tablero[][C],bool jug,bool par){
             ) res++;
         }
 
-    // Diagonales ↙
-    for(int i= par ? 0:1;i+3<F;i += 2)
-        for(int j=F-1;j-3>=0;j--){
+        // Diagonales ↙
+        for(int j=C-1;j>=3;j--){
             if(
                 (tablero[i][j] == 0 &&
                 tablero[i+1][j-1] == jugador &&
@@ -95,6 +104,7 @@ int diagonales_peligrosas(int tablero[][C],bool jug,bool par){
                 tablero[i+3][j-3] == jugador)
             ) res++;
         }
+    }
 
     return res;
 }
@@ -144,8 +154,11 @@ int tresEnRayaHF(const int tablero[][C],bool jug,bool par){
 int PosicionFavorable_El_7_Inverso(const int tablero[][C],bool jug){
     int res=0;
     int jugador = jug ? 1:-1;
-    for(int i=F-1;i-2>=0;i--){
-        for(int j=0;j+2<C;j++){
+#ifdef _OPENMP
+    #pragma omp parallel for reduction(+:res)
+#endif
+    for(int i=F-1;i>=2;i--){
+        for(int j=0;j<C-2;j++){
             if(tablero[i-2][j] == jugador &&
                 tablero[i-2][j+1] == jugador &&
                 tablero[i-2][j+2] == jugador &&
@@ -160,8 +173,11 @@ int PosicionFavorable_El_7_Inverso(const int tablero[][C],bool jug){
 int PosicionFavorable_El_7(const int tablero[][C],bool jug){
     int res=0;
     int jugador = jug ? 1:-1;
-    for(int i=F-1;i-2>=0;i--){
-        for(int j=0;j+2<C;j++){
+#ifdef _OPENMP
+    #pragma omp parallel for reduction(+:res)
+#endif
+    for(int i=F-1;i>=2;i--){
+        for(int j=0;j<C-2;j++){
             if(tablero[i][j] == jugador &&
                 tablero[i-1][j+1] == jugador &&
                 tablero[i-2][j] == jugador &&
@@ -178,83 +194,54 @@ int PosicionFavorable_El_7(const int tablero[][C],bool jug){
  * ----------
  * Detecta patrones de 3 en raya horizontales, verticales y diagonales.
  * Se usa como parte de la heurística del bot.
+ * Optimizado mediante fusión de los 7 bucles en un único recorrido por filas
+ * para reutilizar las filas en caché L1/L2 y facilitar el paralelismo de datos (SIMD).
  */
 int tresEnRaya(int tablero[][C], bool jugado){
     int res = 0;
-
     int jugador = jugado ? 1:-1;
 
-    // Horizontal
-    for(int i=0;i<F;i++)
+#ifdef _OPENMP
+    #pragma omp parallel for reduction(+:res)
+#endif
+    for(int i=0;i<F;i++){
+        // Horizontal (ambos patrones fusionados en una sola pasada de fila)
         for(int j=0;j+3<C;j++){
-            if(
-                (tablero[i][j] == jugador &&
-                tablero[i][j+1] == jugador &&
-                tablero[i][j+2] == jugador &&
-                tablero[i][j+3] == 0)
-            ) res++;
-        }
-    for(int i=0;i<F;i++)
-        for(int j=0;j+3<C;j++){
-            if(
-                (tablero[i][j] == 0 &&
-                tablero[i][j+1] == jugador &&
-                tablero[i][j+2] == jugador &&
-                tablero[i][j+3] == jugador)
-            ) res++;
+            if(tablero[i][j+1] == jugador && tablero[i][j+2] == jugador){
+                if(tablero[i][j] == jugador && tablero[i][j+3] == 0) res++;
+                if(tablero[i][j] == 0 && tablero[i][j+3] == jugador) res++;
+            }
         }
 
-    // Vertical
-    for(int i=0;i+2<F;i++)
-        for(int j=0;j<C;j++){
-            if(
-                (tablero[i][j] == jugador &&
-                tablero[i+1][j] == jugador &&
-                tablero[i+2][j] == jugador)
-            ) res++;
+        // Vertical
+        if(i+2<F){
+            for(int j=0;j<C;j++){
+                if(
+                    tablero[i][j] == jugador &&
+                    tablero[i+1][j] == jugador &&
+                    tablero[i+2][j] == jugador
+                ) res++;
+            }
         }
 
-    // Diagonales ↘ y ↙
-    for(int i=0;i+3<F;i++)
-        for(int j=0;j+3<C;j++){
-            if(
-                (tablero[i][j] == jugador &&
-                tablero[i+1][j+1] == jugador &&
-                tablero[i+2][j+2] == jugador &&
-                tablero[i+2][j+3] == 0)
-            ) res++;
+        // Diagonales ↘ y ↙ (fusionadas para reutilizar las filas i..i+3 en caché)
+        if(i+3<F){
+            for(int j=0;j+3<C;j++){
+                if(tablero[i+1][j+1] == jugador && tablero[i+2][j+2] == jugador){
+                    if(tablero[i][j] == jugador && tablero[i+2][j+3] == 0) res++;
+                    if(tablero[i][j] == 0 && tablero[i+3][j+3] == jugador) res++;
+                }
+            }
+            for(int j=C-1;j-3>=0;j--){
+                if(tablero[i+1][j-1] == jugador && tablero[i+2][j-2] == jugador){
+                    if(tablero[i][j] == jugador && tablero[i+3][j-3] == 0) res++;
+                    if(tablero[i][j] == 0 && tablero[i+3][j-3] == jugador) res++;
+                }
+            }
         }
+    }
 
-    for(int i=0;i+3<F;i++)
-        for(int j=0;j+3<C;j++){
-            if(
-                (tablero[i][j] == 0 &&
-                tablero[i+1][j+1] == jugador &&
-                tablero[i+2][j+2] == jugador &&
-                tablero[i+3][j+3] == jugador)
-            ) res++;
-        }
-    
-    for(int i=0;i+3<F;i++)
-        for(int j=C-1;j-3>=0;j--){
-            if(
-                (tablero[i][j] == jugador &&
-                tablero[i+1][j-1] == jugador &&
-                tablero[i+2][j-2] == jugador &&
-                tablero[i+3][j-3] == 0)
-            ) res++;
-        }
-    for(int i=0;i+3<F;i++)
-        for(int j=C-1;j-3>=0;j--){
-            if(
-                (tablero[i][j] == 0 &&
-                tablero[i+1][j-1] == jugador &&
-                tablero[i+2][j-2] == jugador &&
-                tablero[i+3][j-3] == jugador)
-            ) res++;
-        }
     return res;
-
 }
 
 /*
@@ -407,7 +394,11 @@ void mostrar(int tablero[][C]){
             }
             printf("\033[31;91m | \033[0m");
         }
-        printf("\n\033[31;93m-----------------------------\033[0m\n");
+        printf("\n\033[31;93m-");
+        for(int j=0;j<C;j++){
+            printf("----");
+        }
+        printf("\033[0m\n");
     }
 }
 
@@ -418,7 +409,7 @@ void mostrar(int tablero[][C]){
  */
 void animacion(int tablero[][C], int movimiento,bool ficha, int profundidad){
     int jugador = (ficha) ? 1:-1;
-    if(!(tablero[profundidad][movimiento]!=0)){
+    if(profundidad < F && !(tablero[profundidad][movimiento]!=0)){
         tablero[profundidad][movimiento] = jugador;
         mostrar(tablero);
         tablero[profundidad][movimiento] = 0;
@@ -486,7 +477,7 @@ void mover(int tablero[][C], int movimiento,bool jugador){
 void moverJ(int tablero[][C], bool jugador){
     int movimiento;
     do{
-        printf("Introduzca un numero del 1 al 7\n");
+        printf("Introduzca un numero del 1 al %d\n", C);
         scanf("%d",&movimiento);
         movimiento = movimiento-1;
         if(!(movPosi(tablero,movimiento))){
@@ -525,35 +516,37 @@ void inicializar(int tablero[][C]){
 int bot(int tablero[][C], bool jugador, int umbral,int alfa,int beta){
     int res = 0;
     int puntuacion = 0;
+    int estadoGanador = ganador(tablero);
 
     // Si hay ganador → devolver puntuación extrema
-    if(ganador(tablero)!=0){
-        res = ganador(tablero);
-        if(res==-1){
+    if(estadoGanador!=0){
+        if(estadoGanador==-1){
             res = 10000*umbral;      // Máquina gana → gran valor positivo
         }else{
             res = -10000*umbral;     // Jugador gana → gran valor negativo
         }
-    } else if(lleno(tablero) || umbral==0){
-        // Tablero lleno o profundidad agotada → heurística
-        if(lleno(tablero)){
-            res = 0;                 // Empate
-        } else {
-            // Heurística avanzada basada en múltiples patrones
-            res += tresEnRaya(tablero,false);
-            res -= tresEnRaya(tablero,true);
-            res += rectangulos(tablero,false);
-            res -= rectangulos(tablero,true);
-            res += PosicionFavorable_El_7(tablero,false)*5;
-            res -= PosicionFavorable_El_7(tablero,true)*5;
-            res += PosicionFavorable_El_7_Inverso(tablero,false)*5;
-            res -= PosicionFavorable_El_7_Inverso(tablero,true)*5;
-            res += tresEnRayaHF(tablero,false,true)*12;
-            res -= tresEnRayaHF(tablero,true,false)*12;
-            res -= diagonales_peligrosas(tablero,true,false)*20;
-            res += diagonales_peligrosas(tablero,false,true)*20;
-        }
     } else {
+        bool estaLleno = lleno(tablero);
+        if(estaLleno || umbral==0){
+            // Tablero lleno o profundidad agotada → heurística
+            if(estaLleno){
+                res = 0;                 // Empate
+            } else {
+                // Heurística avanzada basada en múltiples patrones
+                res += tresEnRaya(tablero,false);
+                res -= tresEnRaya(tablero,true);
+                res += rectangulos(tablero,false);
+                res -= rectangulos(tablero,true);
+                res += PosicionFavorable_El_7(tablero,false)*5;
+                res -= PosicionFavorable_El_7(tablero,true)*5;
+                res += PosicionFavorable_El_7_Inverso(tablero,false)*5;
+                res -= PosicionFavorable_El_7_Inverso(tablero,true)*5;
+                res += tresEnRayaHF(tablero,false,true)*12;
+                res -= tresEnRayaHF(tablero,true,false)*12;
+                res -= diagonales_peligrosas(tablero,true,false)*20;
+                res += diagonales_peligrosas(tablero,false,true)*20;
+            }
+        } else {
         // Turno de la máquina (MAX)
         if(!(jugador)){
             int mejorPuntuacion = -999999;
@@ -592,101 +585,140 @@ int bot(int tablero[][C], bool jugador, int umbral,int alfa,int beta){
             }
             res = mejorPuntuacion;
         }
+        }
     }
     
     return res;
 }
 
 /*
- * best_movimiento
- * ---------------
- * Calcula el mejor movimiento para la máquina usando Minimax + Alfa-Beta.
+ * best_movimiento (Paralelizado con MPI)
+ * --------------------------------------
+ * Calcula el mejor movimiento para la máquina usando Minimax + Alfa-Beta
+ * repartiendo las columnas entre los procesos MPI disponibles.
  *
  * Funcionamiento:
- *   - Recorre todas las columnas posibles.
- *   - Simula cada movimiento de la máquina.
- *   - Evalúa la posición resultante con bot().
- *   - Elige el movimiento con mayor puntuación.
- *   - Añade un pequeño factor aleatorio para evitar movimientos repetitivos.
+ *   - Cada proceso evalúa un subconjunto de columnas (reparto cíclico)
+ *     sobre su propia copia del tablero llamando a bot().
+ *   - Mediante MPI_Reduce (con MPI_MAX) se reúnen las puntuaciones de las
+ *     7 columnas en el proceso maestro (rank 0).
+ *   - El proceso maestro selecciona la columna con mayor puntuación
+ *     (manteniendo el factor aleatorio determinista con rand()) y difunde
+ *     la columna elegida al resto de procesos con MPI_Bcast.
  */
-void best_movimiento(int tablero[][C], int umbral){
+void best_movimiento(int tablero[][C], int umbral, int rank, int num_procs){
     int mejorPuntuacion = -999999;
-    int movimiento=0;
-    int Puntuacion = 0;
+    int movimiento = 0;
+    int puntuacionesLocal[C];
+    int puntuacionesGlobal[C];
 
-    // Inicializa movimiento con la primera columna válida
-    for(int i=0;i<C;i++){
-        if (movPosi(tablero,i)){
-            movimiento = i;
+    // Inicializa vectores de puntuaciones con un valor mínimo centinela
+    for(int j = 0; j < C; j++){
+        puntuacionesLocal[j] = INT_MIN;
+        puntuacionesGlobal[j] = INT_MIN;
+    }
+
+    // Reparto cíclico de las columnas entre los procesos MPI
+    for(int j = rank; j < C; j += num_procs){
+        if(movPosi(tablero, j)){
+            mover(tablero, j, false);                                           // Simula movimiento máquina
+            puntuacionesLocal[j] = bot(tablero, true, umbral, -999999, 999999); // Evalúa rama
+            revovinar(tablero, j);                                              // Deshace
         }
     }
 
-    // Evalúa todas las columnas
-    for(int j=0;j<C;j++){
-        if(movPosi(tablero,j)){
-            mover(tablero,j, false);                                      // Simula movimiento máquina
-            Puntuacion = bot(tablero,true,umbral,-999999,999999);         // Evalúa
-            revovinar(tablero,j);                                         // Deshace
+    // Reducción: se combinan las puntuaciones de todas las columnas en rank 0
+    MPI_Reduce(puntuacionesLocal, puntuacionesGlobal, C, MPI_INT, MPI_MAX, 0, MPI_COMM_WORLD);
 
-            if(Puntuacion>mejorPuntuacion){
-                mejorPuntuacion = Puntuacion;
-                movimiento = j;
+    if(rank == 0){
+        // Inicializa movimiento con la última columna válida
+        for(int i = 0; i < C; i++){
+            if (movPosi(tablero, i)){
+                movimiento = i;
             }
+        }
 
-            // Factor aleatorio para evitar patrones repetitivos
-            movimiento = (Puntuacion == mejorPuntuacion && rand()%4==0) ? j:movimiento; 
+        // El maestro selecciona el mejor movimiento a partir de los resultados reducidos
+        for(int j = 0; j < C; j++){
+            if(movPosi(tablero, j)){
+                int Puntuacion = puntuacionesGlobal[j];
 
-            //printf("Puntucacion: %d, Movimiento: %d\n",Puntuacion,j+1);
+                if(Puntuacion > mejorPuntuacion){
+                    mejorPuntuacion = Puntuacion;
+                    movimiento = j;
+                }
+
+                // Factor aleatorio para evitar patrones repetitivos
+                movimiento = (Puntuacion == mejorPuntuacion && rand()%4==0) ? j : movimiento;
+
+                //printf("Puntucacion: %d, Movimiento: %d\n",Puntuacion,j+1);
+            }
         }
     }
 
-    mover(tablero,movimiento,false);  // Ejecuta movimiento final
+    // El maestro difunde la columna elegida para mantener sincronizados todos los tableros
+    MPI_Bcast(&movimiento, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+    mover(tablero, movimiento, false);  // Ejecuta movimiento final en todos los procesos
 }
 
 /*
  * main
  * ----
- * Control principal del juego:
- *   - Inicializa tablero
- *   - Permite jugar contra otro jugador o contra la máquina
- *   - En modo máquina:
- *       * El jugador mueve
- *       * La IA responde usando best_movimiento()
- *       * Aumenta profundidad de búsqueda según turnos
- *   - Finaliza cuando hay ganador o tablero lleno
+ * Control principal del juego (versión MPI):
+ *   - Inicializa el entorno MPI y el tablero en todos los procesos
+ *   - Ejecuta la secuencia predefinida de movimientos del jugador
+ *   - En el turno de la máquina, todos los procesos colaboran en best_movimiento()
+ *   - Sólo el proceso maestro (rank 0) muestra el tablero e imprime por pantalla
  */
 int main(int argc, char *argv[]) {
+    int rank, num_procs;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_procs);
+
     int tablero[F][C];
     int turnos = 0;
     int umbral = 9;
     int i = 0;
 
-    int movimientos[] = {1, 2, 3, 4, 5, 6, 7};
-    int num_movimientos = sizeof(movimientos) / sizeof(movimientos[0]);
+    int movimientos[F * C];
+    int num_movimientos = F * C;
+    for (int k = 0; k < num_movimientos; k++) {
+        movimientos[k] = (k % C) + 1;
+    }
 
     inicializar(tablero);
     srand(999);
 
-    double start = time(NULL);
+    MPI_Barrier(MPI_COMM_WORLD);
+    double start = MPI_Wtime();
 
     while (ganador(tablero) == 0 && !lleno(tablero)) {
 
         // Si no quedan movimientos predefinidos, gana la máquina
         if (i >= num_movimientos) {
-            printf("Se han agotado los movimientos predefinidos.\n");
-            printf("Gana la maquina.\n");
+            if (rank == 0) {
+                printf("Se han agotado los movimientos predefinidos.\n");
+                printf("Gana la maquina.\n");
+            }
             break;
         }
 
-        mostrar(tablero);
+        if (rank == 0) {
+            mostrar(tablero);
+        }
 
         // Intentar ejecutar el siguiente movimiento predefinido
         int movimiento = movimientos[i] - 1;
         i++;
 
         if (!movPosi(tablero, movimiento)) {
-            printf("Movimiento %d no valido. Se pasa al siguiente.\n",
-                   movimiento + 1);
+            if (rank == 0) {
+                printf("Movimiento %d no valido. Se pasa al siguiente.\n",
+                       movimiento + 1);
+            }
             continue;
         }
 
@@ -698,10 +730,12 @@ int main(int argc, char *argv[]) {
         }
 
         // Turno de la máquina
-        printf("La maquina esta pensando...\n");
-        printf("Umbral de pensamiento: %d\n", umbral);
+        if (rank == 0) {
+            printf("La maquina esta pensando...\n");
+            printf("Umbral de pensamiento: %d\n", umbral);
+        }
 
-        best_movimiento(tablero, umbral);
+        best_movimiento(tablero, umbral, rank, num_procs);
         turnos++;
 
         // Ajuste dinámico de profundidad
@@ -710,30 +744,35 @@ int main(int argc, char *argv[]) {
                      : umbral + (int)(!(bool)(turnos % 3));
     }
 
-    double final = time(NULL);
+    MPI_Barrier(MPI_COMM_WORLD);
+    double final = MPI_Wtime();
 
-    mostrar(tablero);
+    if (rank == 0) {
+        mostrar(tablero);
 
-    // Resultado final
-    if (i >= num_movimientos &&
-        ganador(tablero) == 0 &&
-        !lleno(tablero)) {
-        printf("Han ganado las x (la maquina).\n");
-    } else {
-        switch (ganador(tablero)) {
-            case 0:
-                printf("Empate\n");
-                break;
-            case 1:
-                printf("Han ganado las o\n");
-                break;
-            case -1:
-                printf("Han ganado las x\n");
-                break;
+        // Resultado final
+        if (i >= num_movimientos &&
+            ganador(tablero) == 0 &&
+            !lleno(tablero)) {
+            printf("Han ganado las x (la maquina).\n");
+        } else {
+            switch (ganador(tablero)) {
+                case 0:
+                    printf("Empate\n");
+                    break;
+                case 1:
+                    printf("Han ganado las o\n");
+                    break;
+                case -1:
+                    printf("Han ganado las x\n");
+                    break;
+            }
         }
+
+        printf("Tiempo: %f\n", final - start);
     }
 
-    printf("Tiempo: %f\n", final - start);
+    MPI_Finalize();
 
     return 0;
 }
