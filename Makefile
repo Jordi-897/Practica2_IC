@@ -1,6 +1,8 @@
-# GNU Makefile para compilar `cuatroEnraya9.0.c`
+# GNU Makefile para compilar `cuatroEnraya9.0.c` (versión MPI)
 
-CC      ?= gcc
+CC      ?= mpicc
+MPIRUN  ?= mpirun
+NP      ?= 4
 TARGET  := cuatroEnraya
 SRC     := cuatroEnraya9.0.c
 
@@ -37,9 +39,9 @@ sanitize: $(TARGET)
 $(TARGET): $(SRC)
 	$(CC) $(CFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS)
 
-# Ejecuta el juego (compila si es necesario)
+# Ejecuta el juego con MPI (compila si es necesario)
 run: all
-	./$(TARGET)
+	$(MPIRUN) -np $(NP) ./$(TARGET)
 
 # Limpia artefactos de compilación
 clean:
