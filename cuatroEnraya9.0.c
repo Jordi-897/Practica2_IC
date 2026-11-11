@@ -6,8 +6,8 @@
 #include<limits.h>
 #include<mpi.h>
 
-#define F 600
-#define C 10
+#define F 60
+#define C 7
 
 /*
  * max / min
@@ -680,7 +680,7 @@ int main(int argc, char *argv[]) {
 
     int tablero[F][C];
     int turnos = 0;
-    int umbral = 9;
+    int umbral = 7;
     int i = 0;
 
     int movimientos[F * C];
@@ -739,9 +739,7 @@ int main(int argc, char *argv[]) {
         turnos++;
 
         // Ajuste dinámico de profundidad
-        umbral = (C * F / 2) == turnos
-                     ? 1000
-                     : umbral + (int)(!(bool)(turnos % 3));
+        // umbral = (C * F / 2) == turnos ? 1000: umbral + (int)(!(bool)(turnos % 3));
     }
 
     MPI_Barrier(MPI_COMM_WORLD);
